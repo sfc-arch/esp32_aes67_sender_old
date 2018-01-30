@@ -28,6 +28,8 @@ WiFiUDP udp;
 unsigned short loopCount = 0;
 AES67_L16_48kHz aes67(33773, 126, 2863311530);
 
+TaskHandle_t th[2];
+
 //wifi event handler
 void WiFiEvent(WiFiEvent_t event)
 {
@@ -141,15 +143,38 @@ void setup()
    // Serial.println(r);
 }
 
+void sendPacket(void *pvParameters)
+{
+   aes67.addSampleSample(loopCount);
+   // if (loopCount % 100 == 0)
+   // {
+      Serial.printf(" * Loop No.%u\n", loopCount);
+   // };
+
+   // //Send a packet
+   udp.beginPacket(udpAddress, udpPort);
+   udp.print(aes67.createUdpPayload());
+   udp.endPacket();
+   udp.flush();
+
+   aes67 = AES67_L16_48kHz(aes67, aes67.timestamp() + 250);
+
+   // end task
+   vTaskDelete(NULL);
+}
+
 void loop()
 {
    //only send data when connected
-   if (connected && loopCount < 500)
+   if (connected && loopCount < 1000)
    {
       loopCount++;
       
+      /*
       aes67.addSampleSample(loopCount);
-      Serial.printf(" * Loop No.%u\n", loopCount);
+      if (loopCount % 100 == 0) {
+         Serial.printf(" * Loop No.%u\n", loopCount);
+      };
       // Serial.println(aes67.info());
       // String r = aes67.createUdpPayload();
       // Serial.println("RTP to string: ");
@@ -163,6 +188,16 @@ void loop()
       udp.endPacket();
 
       aes67 = AES67_L16_48kHz(aes67, aes67.timestamp() + 250);
+      */
+
+      xTaskCreatePinnedToCore(
+          sendPacket,
+          "Sample one-time task",
+          8172,
+          NULL,
+          4,
+          &th[0],
+          0);
    }
    //Wait for 250us
    delayMicroseconds(250);
